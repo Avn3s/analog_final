@@ -150,9 +150,51 @@ def apply_corrections(data, report):
     return corrected
 
 
+def sensor_health_index(report, sensor=None):
+    """Percentage (0 to 100) of a sensor's readings that were recorded correctly.
+
+    A reading counts as correct when the sensor was not blamed for drift in that row.
+    Rows with empty cells are left out, because they cannot be checked.
+    100.0 = never blamed, lower = blamed more often.
+
+    Give one sensor name to get a single float. Give no sensor to get a dictionary
+    with the index of every sensor (every column except condition_label)."""
+    if sensor is None:
+        sensors = [
+            c[len("drift_") :]
+            for c in report.columns
+            if c.startswith("drift_") and c != "drift_condition_label"
+        ]
+        return {s: sensor_health_index(report, s) for s in sensors}
+
+    if not isinstance(sensor, str):
+        raise TypeError(
+            f"sensor must be one column name such as 'temperature_sensor_C', not {sensor!r}"
+        )
+    if "drift_" + sensor not in report.columns:
+        raise ValueError(
+            f"report has no 'drift_{sensor}' column - is '{sensor}' a column of your data?"
+        )
+    scored = report["note"] == ""
+    if scored.sum() == 0:
+        raise ValueError("no rows could be scored, so there is nothing to measure")
+
+    blamed = report.loc[scored, "drift_" + sensor].notna()
+    return float(round(100 * (1 - blamed.mean()), 1))
+
+
+# Every sensor is compared. Each entry is:
+#   sensor column: (column in the truth table, smallest drift that counts as real)
+# A sensor with no column in the truth table is treated as having no drift.
 DEFAULT_SENSORS = {
+    "load_percent": ("true_load_percent_drift", 0.1),
+    "ambient_temp_C": ("true_ambient_temp_C_drift", 0.05),
     "temperature_sensor_C": ("true_temp_drift", 0.05),
+    "humidity_percent": ("true_humidity_percent_drift", 0.5),
     "current_sensor_A": ("true_current_drift", 0.005),
+    "vibration_rms_g": ("true_vibration_rms_g_drift", 0.03),
+    "vibration_peak_g": ("true_vibration_peak_g_drift", 0.1),
+    "bearing_freq_peak_Hz": ("true_bearing_freq_peak_Hz_drift", 15),
 }
 
 
@@ -176,10 +218,15 @@ def compare(report, truth, sensors=DEFAULT_SENSORS):
     scored = report["note"] == ""  # rows without blank cells
 
     # Mark row as drifting or inconsistent if drift/error exceeds threshold
+    true_drift = {}
     drifting = {}
     truly_drifting = pd.Series(False, index=report.index)
     for sensor, (truth_column, tolerance) in sensors.items():
-        drifting[sensor] = truth[truth_column].abs() > tolerance
+        if truth_column in truth.columns:
+            true_drift[sensor] = truth[truth_column]
+        else:  # no column in the truth table = no drift was added to this sensor
+            true_drift[sensor] = pd.Series(0.0, index=truth.index)
+        drifting[sensor] = true_drift[sensor].abs() > tolerance
         truly_drifting |= drifting[sensor]
 
     summary = {
@@ -200,7 +247,7 @@ def compare(report, truth, sensors=DEFAULT_SENSORS):
         blamed = flagged & report[drift_column].notna()
         error = (
             report.loc[blamed, drift_column].astype(float)
-            - truth.loc[blamed, truth_column]
+            - true_drift[sensor].loc[blamed]
         )
         sensor_results[sensor] = {
             "rows_blamed": int(blamed.sum()),
