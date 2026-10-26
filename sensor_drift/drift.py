@@ -6,9 +6,7 @@ from sklearn.preprocessing import StandardScaler
 LABELS = {"LOW": 0, "MEDIUM": 1, "HIGH": 2}
 
 
-# ---------------------------------------------------------------
-# Loading and labels
-# ---------------------------------------------------------------
+
 def load_data(path):
     """Read csv data, drop rpm column and rows with empty values,
     and encode every non-numerical value into numerical values."""
