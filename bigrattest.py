@@ -1,5 +1,7 @@
-import sensor_drift.drift as sd
+from pandas import read_csv
+
 import machine_health.health as mh
+import sensor_drift.drift as sd
 
 print("Healthy Training Data: ")
 healthy = sd.load_data("sensor_drift/train_data.csv")
@@ -16,6 +18,15 @@ print("\n\nCorrected Test dataset:")
 corrected = sd.apply_corrections(test, report)
 
 print(corrected)
+
+print(
+    "\nTrue Drift Values: "
+)  # The actual drift values that were artificially introduced for testing purposes
+truth = read_csv("sensor_drift/test_truth.csv")
+print(truth)
+
+print("\nComparison of True Drift and Identified Drift: \n")
+sd.compare(report, truth)
 
 print("\n\nSensor Health:")
 

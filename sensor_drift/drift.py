@@ -11,11 +11,16 @@ def load_data(path):
     """Read csv data, drop rpm column and rows with empty values,
     and encode every non-numerical value into numerical values."""
     df = pd.read_csv(path, na_values=[" ", ""], skipinitialspace=True)
-    df = df.drop(columns=["rpm"], errors="ignore")
+
     df["bearing_freq_peak_Hz"] = pd.to_numeric(
         df["bearing_freq_peak_Hz"], errors="coerce"
     )
     df["condition_label"] = df["condition_label"].str.strip().str.upper().map(LABELS)
+    df["temperature_gain_C"] = df["temperature_sensor_C"] - df["ambient_temp_C"]
+    df = df.drop(
+        columns=["rpm", "humidity_percent", "temperature_sensor_C", "ambient_temp_C"],
+        errors="ignore",
+    )  # rpm training values themselves are inaccurate and humidity is uncorrelated with the remaining sensor values
     return df
 
 
@@ -169,7 +174,7 @@ def sensor_health_index(report, sensor=None):
 
     if not isinstance(sensor, str):
         raise TypeError(
-            f"sensor must be one column name such as 'temperature_sensor_C', not {sensor!r}"
+            f"sensor must be one column name such as 'temperature_gain_C', not {sensor!r}"
         )
     if "drift_" + sensor not in report.columns:
         raise ValueError(
@@ -188,9 +193,7 @@ def sensor_health_index(report, sensor=None):
 # A sensor with no column in the truth table is treated as having no drift.
 DEFAULT_SENSORS = {
     "load_percent": ("true_load_percent_drift", 0.1),
-    "ambient_temp_C": ("true_ambient_temp_C_drift", 0.05),
-    "temperature_sensor_C": ("true_temp_drift", 0.05),
-    "humidity_percent": ("true_humidity_percent_drift", 0.5),
+    "temperature_gain_C": ("true_temp_drift", 0.05),
     "current_sensor_A": ("true_current_drift", 0.005),
     "vibration_rms_g": ("true_vibration_rms_g_drift", 0.03),
     "vibration_peak_g": ("true_vibration_peak_g_drift", 0.1),

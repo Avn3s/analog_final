@@ -15,11 +15,16 @@ def load_data(path):
     """Read csv data, drop rpm column and rows with empty values,
     and encode every non-numerical value into numerical values."""
     df = pd.read_csv(path, na_values=[" ", ""], skipinitialspace=True)
-    df = df.drop(columns=["rpm"], errors="ignore")
+
     df["bearing_freq_peak_Hz"] = pd.to_numeric(
         df["bearing_freq_peak_Hz"], errors="coerce"
     )
     df["condition_label"] = df["condition_label"].str.strip().str.upper().map(LABELS)
+    df["temperature_gain_C"] = df["temperature_sensor_C"] - df["ambient_temp_C"]
+    df = df.drop(
+        columns=["rpm", "humidity_percent", "temperature_sensor_C", "ambient_temp_C"],
+        errors="ignore",
+    )  # rpm training values themselves are inaccurate and humidity is uncorrelated with the remaining sensor values
     return df
 
 
